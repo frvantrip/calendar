@@ -119,14 +119,13 @@
       pointer-events:none;
     }
 
-    /* Locked overlay text (drawn on canvas too, but keep style for consistency) */
     .locked-hint{
       position:absolute;
       inset:auto 0 0 0;
-      padding:.45rem .6rem;
-      font-size:.75rem;
-      color:rgba(255,255,255,.92);
-      background:linear-gradient(135deg, rgba(140,43,43,.85), rgba(204,75,75,.75));
+      padding:.5rem .65rem;
+      font-size:.78rem;
+      color:rgba(255,255,255,.95);
+      background:linear-gradient(135deg, rgba(140,43,43,.9), rgba(204,75,75,.8));
       text-align:center;
       pointer-events:none;
     }
@@ -297,7 +296,7 @@
 <script>
 (() => {
   // ===== VERSIONING =====
-  const APP_VERSION = 2;
+  const APP_VERSION = 3;
   console.log("[Calendar] version =", APP_VERSION);
 
   // ===== CONFIG =====
@@ -307,6 +306,20 @@
   const REVEALED_KEY = "calendar_revealed_v1";
   const TIMEZONE = "Europe/Rome";
   const SCRATCH_THRESHOLD = 55; // percent
+
+  // ===== LOCK MESSAGES (unique per giorno) =====
+  // Testi pensati per quando quel giorno NON è ancora disponibile.
+  const LOCK_MESSAGES = {
+    "16": "Ehi Le 😄 oggi no: si apre il 16!",
+    "17": "Dai Le, aspetta il 17 😌",
+    "18": "Dai Le, aspetta il 18 👀",
+    "19": "Piano piano… il 19 arriva 💛",
+    "20": "Ancora un po’: ci vediamo il 20 ✨",
+    "21": "No spoiler 😇 si sblocca il 21",
+    "22": "Resisti… manca poco al 22 😍",
+    "23": "Quasi! Il 23 è dietro l’angolo 🎁",
+    "24": "Il gran finale è il 24 🎄"
+  };
 
   // ===== HELPERS =====
   function safeJsonParse(str, fallback) {
@@ -441,7 +454,26 @@
     ctx.font = `${Math.max(16, Math.floor(18*dpr))}px system-ui, -apple-system, Segoe UI, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(labelText, w/2, h/2);
+
+    // multi-line wrap (simple)
+    const maxWidth = w * 0.8;
+    const words = String(labelText).split(" ");
+    let line = "";
+    const lines = [];
+    for (const word of words) {
+      const test = line ? (line + " " + word) : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+
+    const lineH = Math.max(20, Math.floor(22 * dpr));
+    const startY = h/2 - (lines.length-1)*lineH/2;
+    lines.forEach((l, i) => ctx.fillText(l, w/2, startY + i*lineH));
 
     canvas.classList.remove("hidden");
     canvas.style.pointerEvents = "auto";
@@ -493,6 +525,10 @@
       if (lockedHintEl) lockedHintEl.style.display = "none";
     }
 
+    function lockMessageForDay(dayNum) {
+      return LOCK_MESSAGES[String(dayNum)] || `Dai Le, aspetta il ${dayNum} 😉`;
+    }
+
     function renderGift() {
       const g = giftFor(day);
       if (g.imageUrl) {
@@ -505,6 +541,9 @@
       cap.textContent = g.caption || `Regalino del ${day} dicembre ✨`;
     }
 
+    // IMPORTANT:
+    // - Admin can always scratch
+    // - Non-admin can scratch only if unlocked (today or past)
     const unlockedForUser = isAdmin ? true : isUnlocked(day, targetYear);
 
     function reveal() {
@@ -512,60 +551,13 @@
       saveState();
       canvas.classList.add("hidden");
 
-      // sparkle
       sparkle.classList.remove("run");
       void sparkle.offsetWidth;
       sparkle.classList.add("run");
       setTimeout(() => sparkle.classList.remove("run"), 950);
     }
 
-    function resetScratch() {
-      delete revealed[String(day)];
-      saveState();
-      // re-init overlay based on lock/unlock
-      attachScratch(true);
-    }
-
-    function attachScratch(forceReinit = false) {
-      // already revealed
-      if (revealed[String(day)]) {
-        canvas.classList.add("hidden");
-        canvas.style.pointerEvents = "none";
-        clearLockedHint();
-        return;
-      }
-
-      // if locked (non-admin future day): show overlay but disable scratching
-      if (!unlockedForUser) {
-        initScratchOverlay(canvas, ctx, `Disponibile dal ${day} dicembre`);
-        canvas.style.pointerEvents = "none";
-        canvas.classList.remove("hidden");
-        setLockedHint(`Si sblocca il ${day} dicembre`);
-        return;
-      }
-
-      // unlocked: normal scratch
-      clearLockedHint();
-      if (forceReinit) {
-        // remove old listeners by cloning canvas (simple & safe)
-        const newCanvas = canvas.cloneNode(true);
-        canvas.parentElement.replaceChild(newCanvas, canvas);
-        // update refs
-        // NOTE: after replace, we must re-bind
-        const c2 = newCanvas;
-        const ctx2 = c2.getContext("2d");
-        // overwrite outer scoped vars
-        // (we just re-run init + listeners using inner function)
-        // To keep code simple, we re-enter by calling internal binder:
-        bindScratch(c2, ctx2);
-        return;
-      }
-
-      bindScratch(canvas, ctx);
-    }
-
     function bindScratch(c, cctx) {
-      // init overlay each time we bind (safe on resize too)
       initScratchOverlay(c, cctx, `Gratta il ${day}`);
 
       let drawing = false;
@@ -613,12 +605,48 @@
         maybeReveal();
       });
 
-      // resize
       window.addEventListener("resize", () => {
         if (revealed[String(day)]) return;
         if (!unlockedForUser) return;
         initScratchOverlay(c, cctx, `Gratta il ${day}`);
       }, { passive:true });
+    }
+
+    function attachScratch(forceReinit = false) {
+      if (revealed[String(day)]) {
+        canvas.classList.add("hidden");
+        canvas.style.pointerEvents = "none";
+        clearLockedHint();
+        return;
+      }
+
+      if (!unlockedForUser) {
+        const msg = lockMessageForDay(day);
+        initScratchOverlay(canvas, ctx, msg);
+        canvas.style.pointerEvents = "none";
+        canvas.classList.remove("hidden");
+        setLockedHint(msg);
+        return;
+      }
+
+      clearLockedHint();
+
+      if (forceReinit) {
+        const newCanvas = canvas.cloneNode(true);
+        canvas.parentElement.replaceChild(newCanvas, canvas);
+        const c2 = newCanvas;
+        const ctx2 = c2.getContext("2d");
+        bindScratch(c2, ctx2);
+        return;
+      }
+
+      bindScratch(canvas, ctx);
+    }
+
+    function resetScratch() {
+      delete revealed[String(day)];
+      saveState();
+      attachScratch(true);
     }
 
     renderGift();
@@ -701,7 +729,7 @@
 
     const cardsByDay = new Map();
 
-    // Show ALWAYS all days, but allow scratching only up to current day (unless admin)
+    // Always show all days; only allow scratch up to current day (unless admin)
     DAYS.forEach(day => {
       const api = createCard(day, { isAdmin, targetYear });
       calendarEl.appendChild(api.card);
