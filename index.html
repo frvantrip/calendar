@@ -6,223 +6,485 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top left, #3e1026, #120810 60%, #050308);
-      color: #fff;
-      display: flex;
-      justify-content: center;
-      padding: 1rem;
+    :root{
+      --bg1:#3e1026;
+      --bg2:#120810;
+      --bg3:#050308;
+      --card:rgba(255,255,255,0.96);
+      --ink:#2b1620;
+      --muted:#6b4b57;
+      --accent:#cc4b4b;
+      --accent2:#8c2b2b;
+      --shadow:0 20px 40px rgba(0,0,0,0.35);
+      --r22:22px;
+      --r16:16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at top left,var(--bg1),var(--bg2) 60%,var(--bg3));
+      color:#fff;
+      display:flex;
+      justify-content:center;
+      padding:1rem;
+    }
+    main{width:100%;max-width:1100px}
+    h1{margin:0 0 .5rem;font-size:2.2rem}
+    .subtitle{opacity:.88;margin:0 0 1.2rem}
+    .topbar{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:1rem;
+      margin-bottom:.75rem;
+    }
+    .meta{
+      font-size:.8rem;
+      opacity:.75;
+      text-align:right;
+      white-space:nowrap;
+    }
+    .calendar-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:1rem;
+    }
+    .day-card{
+      background:var(--card);
+      color:var(--ink);
+      border-radius:var(--r22);
+      padding:.9rem;
+      box-shadow:var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+    .day-title{
+      font-weight:800;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:.78rem;
+      color:var(--accent2);
+      margin-bottom:.55rem;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .badge{
+      font-weight:700;
+      font-size:.72rem;
+      padding:.14rem .5rem;
+      border-radius:999px;
+      background:rgba(204,75,75,.12);
+      color:var(--accent2);
+    }
+    .scratch-container{
+      position:relative;
+      border-radius:var(--r16);
+      overflow:hidden;
+      background:#f5f0eb;
+      min-height:220px;
+    }
+    .gift-content{
+      padding:.7rem;
+      text-align:center;
+    }
+    .gift-image{
+      max-width:100%;
+      max-height:180px;
+      object-fit:contain;
+      border-radius:12px;
+      margin:0 auto .45rem;
+      display:block;
+      box-shadow:0 10px 24px rgba(0,0,0,.12);
+    }
+    .gift-image.placeholder{display:none}
+    .gift-caption{
+      font-size:.92rem;
+      color:var(--muted);
+      line-height:1.25rem;
+    }
+    canvas.scratch{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      touch-action:none;
+      cursor:pointer;
+      transition:opacity .35s ease;
+    }
+    canvas.scratch.hidden{
+      opacity:0;
+      pointer-events:none;
+    }
+    /* Locked overlay (for non-admin only if we decide to show future; now we hide future entirely,
+       but keeping for safety) */
+    .locked-overlay{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:1rem;
+      color:#fff;
+      background:linear-gradient(135deg, rgba(140,43,43,.92), rgba(204,75,75,.85));
+      font-weight:750;
+      letter-spacing:.02em;
     }
 
-    main {
-      width: 100%;
-      max-width: 1100px;
+    /* Sparkle burst */
+    .sparkle{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:#fff;
+      pointer-events:none;
+      opacity:0;
+      transform:translate(-50%,-50%);
+    }
+    .sparkle.run{
+      opacity:1;
+      animation: pop 900ms ease-out forwards;
+    }
+    @keyframes pop{
+      0%{transform:translate(-50%,-50%) scale(.7);opacity:0}
+      15%{opacity:1}
+      100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}
+    }
+    .sparkle i{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:4px;
+      height:18px;
+      border-radius:999px;
+      background:#fff;
+      transform-origin:50% 100%;
+      opacity:.9;
+    }
+    .sparkle i:nth-child(1){transform:translate(-50%,-100%) rotate(0deg)}
+    .sparkle i:nth-child(2){transform:translate(-50%,-100%) rotate(30deg)}
+    .sparkle i:nth-child(3){transform:translate(-50%,-100%) rotate(60deg)}
+    .sparkle i:nth-child(4){transform:translate(-50%,-100%) rotate(90deg)}
+    .sparkle i:nth-child(5){transform:translate(-50%,-100%) rotate(120deg)}
+    .sparkle i:nth-child(6){transform:translate(-50%,-100%) rotate(150deg)}
+    .sparkle i:nth-child(7){transform:translate(-50%,-100%) rotate(180deg)}
+    .sparkle i:nth-child(8){transform:translate(-50%,-100%) rotate(210deg)}
+    .sparkle i:nth-child(9){transform:translate(-50%,-100%) rotate(240deg)}
+    .sparkle i:nth-child(10){transform:translate(-50%,-100%) rotate(270deg)}
+    .sparkle i:nth-child(11){transform:translate(-50%,-100%) rotate(300deg)}
+    .sparkle i:nth-child(12){transform:translate(-50%,-100%) rotate(330deg)}
+
+    /* ADMIN panel */
+    #admin{
+      position:fixed;
+      bottom:1rem;
+      right:1rem;
+      background:rgba(255,255,255,0.98);
+      color:var(--ink);
+      padding:.85rem;
+      border-radius:18px;
+      box-shadow:0 20px 44px rgba(0,0,0,0.45);
+      font-size:.82rem;
+      max-width:330px;
+      z-index:10;
+    }
+    #admin.hidden{display:none}
+    #admin .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.6rem;
+      margin-bottom:.2rem;
+    }
+    #admin .pill{
+      font-size:.7rem;
+      padding:.12rem .5rem;
+      border-radius:999px;
+      background:rgba(204,75,75,.12);
+      color:var(--accent2);
+      font-weight:700;
+      white-space:nowrap;
+    }
+    #admin label{
+      display:block;
+      margin-top:.45rem;
+      opacity:.75;
+      font-size:.78rem;
+    }
+    #admin input,#admin textarea,#admin select{
+      width:100%;
+      border-radius:10px;
+      border:1px solid rgba(0,0,0,.12);
+      padding:.35rem .45rem;
+      font-family:inherit;
+      font-size:.82rem;
+      outline:none;
+      background:#faf7f4;
+    }
+    #admin textarea{resize:vertical;min-height:56px}
+    #admin .btns{display:flex;gap:.4rem;margin-top:.55rem;flex-wrap:wrap}
+    #admin button{
+      border:none;
+      border-radius:999px;
+      padding:.4rem .6rem;
+      cursor:pointer;
+      font-weight:700;
+      font-family:inherit;
+      font-size:.8rem;
+      flex:1 1 auto;
+      white-space:nowrap;
+    }
+    #admin .primary{
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      color:#fff;
+    }
+    #admin .secondary{
+      background:#eee;
+      color:#333;
     }
 
-    h1 {
-      margin: 0 0 0.5rem;
-      font-size: 2.2rem;
-    }
-
-    .subtitle {
-      opacity: 0.85;
-      margin-bottom: 1.5rem;
-    }
-
-    .calendar-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1rem;
-    }
-
-    .day-card {
-      background: rgba(255,255,255,0.96);
-      color: #2b1620;
-      border-radius: 22px;
-      padding: 0.9rem;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.35);
-    }
-
-    .day-title {
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.8rem;
-      color: #8c2b2b;
-      margin-bottom: 0.5rem;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .scratch-container {
-      position: relative;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #f5f0eb;
-      min-height: 220px;
-    }
-
-    .gift-content {
-      padding: 0.7rem;
-      text-align: center;
-    }
-
-    .gift-image {
-      max-width: 100%;
-      max-height: 180px;
-      object-fit: contain;
-      border-radius: 12px;
-      margin-bottom: 0.4rem;
-      display: block;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    .gift-image.placeholder {
-      display: none;
-    }
-
-    .gift-caption {
-      font-size: 0.9rem;
-      color: #6b4b57;
-    }
-
-    canvas {
-      position: absolute;
-      inset: 0;
-      touch-action: none;
-      cursor: pointer;
-    }
-
-    canvas.hidden {
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.4s ease;
-    }
-
-    /* ADMIN */
-    #admin {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      background: rgba(255,255,255,0.97);
-      color: #2b1620;
-      padding: 0.8rem;
-      border-radius: 18px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-      font-size: 0.8rem;
-      max-width: 320px;
-    }
-
-    #admin.hidden { display: none; }
-
-    #admin label {
-      display: block;
-      margin-top: 0.4rem;
-      opacity: 0.7;
-    }
-
-    #admin input, #admin textarea, #admin select {
-      width: 100%;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-      padding: 0.3rem;
-      font-family: inherit;
-      font-size: 0.8rem;
-    }
-
-    #admin button {
-      margin-top: 0.4rem;
-      width: 100%;
-      border: none;
-      border-radius: 999px;
-      padding: 0.35rem;
-      background: linear-gradient(135deg, #cc4b4b, #8c2b2b);
-      color: #fff;
-      cursor: pointer;
-    }
-
-    #admin .secondary {
-      background: #eee;
-      color: #333;
+    @media (max-width:720px){
+      .topbar{flex-direction:column;align-items:flex-start}
+      .meta{text-align:left}
+      #admin{left:.8rem;right:.8rem;max-width:none}
     }
   </style>
 </head>
 
 <body>
-<main>
-  <h1>🎁 Calendario di Letizia</h1>
-  <div class="subtitle">Dal 16 al 24 dicembre – gratta ogni giorno 💛</div>
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>🎁 Calendario di Letizia</h1>
+        <p class="subtitle">Dal 16 al 24 dicembre – ogni giorno un regalino da grattare 💛</p>
+      </div>
+      <div class="meta" id="meta"></div>
+    </div>
 
-  <!-- QUESTO È IL CONTAINER FONDAMENTALE -->
-  <section id="calendar" class="calendar-grid"></section>
-</main>
+    <section id="calendar" class="calendar-grid"></section>
+  </main>
 
-<!-- ADMIN -->
-<div id="admin" class="hidden">
-  <strong>Modalità Fra</strong>
+  <div id="admin" class="hidden">
+    <div class="row">
+      <strong>Modalità Fra</strong>
+      <span class="pill">admin</span>
+    </div>
 
-  <label>Giorno</label>
-  <select id="a-day"></select>
+    <label for="a-day">Giorno</label>
+    <select id="a-day"></select>
 
-  <label>URL immagine</label>
-  <input id="a-img" />
+    <label for="a-img">URL immagine</label>
+    <input id="a-img" placeholder="https://..." />
 
-  <label>Didascalia</label>
-  <textarea id="a-cap"></textarea>
+    <label for="a-cap">Didascalia</label>
+    <textarea id="a-cap" placeholder="Testo sotto l'immagine"></textarea>
 
-  <button id="a-save">Salva override locale</button>
-  <button id="a-clear" class="secondary">Rimuovi override</button>
-</div>
+    <div class="btns">
+      <button id="a-save" class="primary">Salva override locale</button>
+      <button id="a-clear" class="secondary">Rimuovi override</button>
+      <button id="a-reset" class="secondary">Reset grattata</button>
+    </div>
+
+    <div style="margin-top:.4rem;opacity:.75;font-size:.74rem;line-height:1.1rem">
+      Nota: dal browser non posso scrivere su GitHub. Per rendere definitivo per Letizia,
+      aggiorna <code>gifts.json</code> nel repo.
+    </div>
+  </div>
 
 <script>
 (() => {
-  const DAYS = [16,17,18,19,20,21,22,23,24];
-  const CONFIG_URL = "./gifts.json";
-  const OVERRIDE_KEY = "calendar_overrides";
-  const REVEALED_KEY = "calendar_revealed";
+  // ===== VERSIONING =====
+  const APP_VERSION = 1;
+  console.log("[Calendar] version =", APP_VERSION);
 
-  const overrides = JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}");
-  const revealed = JSON.parse(localStorage.getItem(REVEALED_KEY) || "{}");
+  // ===== CONFIG =====
+  const DAYS = [16,17,18,19,20,21,22,23,24];
+  const CONFIG_URL = "./gifts.json";   // stesso repo
+  const OVERRIDE_KEY = "calendar_overrides_v1";
+  const REVEALED_KEY = "calendar_revealed_v1";
+  const TIMEZONE = "Europe/Rome";
+  const SCRATCH_THRESHOLD = 55; // percento area grattata per rivelare
+
+  // ===== HELPERS =====
+  function safeJsonParse(str, fallback) {
+    try { return JSON.parse(str); } catch { return fallback; }
+  }
+
+  function nowInRomeParts() {
+    const fmt = new Intl.DateTimeFormat("it-IT", {
+      timeZone: TIMEZONE,
+      year: "numeric", month: "2-digit", day: "2-digit"
+    });
+    const parts = fmt.formatToParts(new Date());
+    const get = (t) => parts.find(p => p.type === t)?.value;
+    return {
+      year: Number(get("year")),
+      month: Number(get("month")),
+      day: Number(get("day")),
+    };
+  }
+
+  function isUnlocked(dayNumber, baseYear) {
+    const { year, month, day } = nowInRomeParts();
+    const y = baseYear ?? year;
+    // Sblocco SOLO a dicembre dell'anno target. Se anno diverso, consideriamo:
+    // - se siamo oltre quell'anno -> sbloccato
+    // - se siamo prima -> bloccato
+    if (year > y) return true;
+    if (year < y) return false;
+
+    // stesso anno
+    if (month > 12) return true;
+    if (month < 12) return false;
+
+    // dicembre
+    return day >= dayNumber;
+  }
+
+  function setMetaText(isAdmin, targetYear) {
+    const { year, month, day } = nowInRomeParts();
+    const meta = document.getElementById("meta");
+    const mm = String(month).padStart(2,"0");
+    const dd = String(day).padStart(2,"0");
+    meta.innerHTML = `
+      <div>Versione: <strong>${APP_VERSION}</strong></div>
+      <div>Oggi (Roma): <strong>${dd}/${mm}/${year}</strong></div>
+      <div>Anno calendario: <strong>${targetYear}</strong></div>
+      ${isAdmin ? `<div style="margin-top:.25rem"><strong>Admin ON</strong></div>` : ""}
+    `;
+  }
+
+  // ===== STATE =====
+  const overrides = safeJsonParse(localStorage.getItem(OVERRIDE_KEY) || "{}", {});
+  const revealed  = safeJsonParse(localStorage.getItem(REVEALED_KEY) || "{}", {});
   let remoteGifts = {};
 
-  const calendar = document.getElementById("calendar");
-
-  function save() {
+  function saveState() {
     localStorage.setItem(OVERRIDE_KEY, JSON.stringify(overrides));
     localStorage.setItem(REVEALED_KEY, JSON.stringify(revealed));
   }
 
   function giftFor(day) {
-    return overrides[day] || remoteGifts[day] || {};
+    const key = String(day);
+    return overrides[key] || remoteGifts[key] || {};
   }
 
-  function createCard(day) {
-    const card = document.createElement("div");
+  async function fetchRemoteGifts() {
+    try {
+      const res = await fetch(CONFIG_URL + (CONFIG_URL.includes("?") ? "&" : "?") + "v=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const json = await res.json();
+      return json && json.gifts ? json.gifts : {};
+    } catch (e) {
+      console.warn("[Calendar] gifts.json non caricato:", e?.message || e);
+      return {};
+    }
+  }
+
+  // ===== UI BUILD =====
+  function ensureCalendarEl() {
+    let el = document.getElementById("calendar");
+    if (!el) {
+      el = document.createElement("section");
+      el.id = "calendar";
+      el.className = "calendar-grid";
+      document.querySelector("main")?.appendChild(el) || document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function makeSparkle() {
+    const s = document.createElement("div");
+    s.className = "sparkle";
+    // 12 rays
+    for (let i=0;i<12;i++){
+      const ray = document.createElement("i");
+      s.appendChild(ray);
+    }
+    return s;
+  }
+
+  function computeScratchedPercent(ctx, canvas) {
+    try {
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = img.data;
+      let transparent = 0;
+      const total = data.length / 4;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] === 0) transparent++;
+      }
+      return (transparent / total) * 100;
+    } catch {
+      return 0;
+    }
+  }
+
+  function initScratchOverlay(canvas, ctx, labelText) {
+    const container = canvas.parentElement;
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width  = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // draw in device pixels
+    const w = canvas.width, h = canvas.height;
+    const grad = ctx.createLinearGradient(0,0,w,h);
+    grad.addColorStop(0, "#b54a4a");
+    grad.addColorStop(1, "#8c2b2b");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,w,h);
+
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = `${Math.max(16, Math.floor(18*dpr))}px system-ui, -apple-system, Segoe UI, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(labelText, w/2, h/2);
+
+    canvas.classList.remove("hidden");
+    canvas.style.pointerEvents = "auto";
+  }
+
+  function createCard(day, opts) {
+    const { isAdmin, targetYear, onRendered } = opts;
+
+    const card = document.createElement("article");
     card.className = "day-card";
+    card.dataset.day = String(day);
 
     card.innerHTML = `
-      <div class="day-title">Giorno ${day} <span>Dic</span></div>
+      <div class="day-title">
+        <span>Giorno ${day}</span>
+        <span class="badge">Dic</span>
+      </div>
       <div class="scratch-container">
         <div class="gift-content">
-          <img class="gift-image placeholder">
+          <img class="gift-image placeholder" alt="Regalo del ${day} dicembre" />
           <div class="gift-caption">Regalino del ${day} dicembre ✨</div>
         </div>
-        <canvas></canvas>
+        <canvas class="scratch"></canvas>
       </div>
     `;
 
-    calendar.appendChild(card);
-
-    const img = card.querySelector("img");
+    const container = card.querySelector(".scratch-container");
+    const img = card.querySelector(".gift-image");
     const cap = card.querySelector(".gift-caption");
-    const canvas = card.querySelector("canvas");
+    const canvas = card.querySelector("canvas.scratch");
     const ctx = canvas.getContext("2d");
+
+    const sparkle = makeSparkle();
+    container.appendChild(sparkle);
 
     function renderGift() {
       const g = giftFor(day);
@@ -230,98 +492,212 @@
         img.src = g.imageUrl;
         img.classList.remove("placeholder");
       } else {
+        img.removeAttribute("src");
         img.classList.add("placeholder");
       }
-      cap.textContent = g.caption || cap.textContent;
+      cap.textContent = g.caption || `Regalino del ${day} dicembre ✨`;
+      onRendered && onRendered(day);
     }
 
-    function initScratch() {
-      const r = canvas.parentElement.getBoundingClientRect();
-      canvas.width = r.width;
-      canvas.height = r.height;
-      ctx.fillStyle = "#8c2b2b";
-      ctx.fillRect(0,0,r.width,r.height);
-      ctx.fillStyle = "#fff";
-      ctx.font = "600 18px system-ui";
-      ctx.textAlign = "center";
-      ctx.fillText("Gratta", r.width/2, r.height/2);
-      canvas.classList.remove("hidden");
+    // Lock / hide logic
+    const unlocked = isAdmin ? true : isUnlocked(day, targetYear);
+
+    // If not admin, hide future days entirely
+    if (!isAdmin && !unlocked) {
+      // We don't append this card at all (handled outside),
+      // but keep guard just in case.
+      return { card, renderGift, attachScratch: () => {} , isVisible:false };
     }
 
-    let scratching = false;
+    function reveal() {
+      revealed[String(day)] = true;
+      saveState();
+      canvas.classList.add("hidden");
 
-    canvas.onpointerdown = e => { scratching = true; scratch(e); };
-    canvas.onpointermove = e => scratching && scratch(e);
-    canvas.onpointerup = () => scratching = false;
+      // sparkle animation
+      sparkle.classList.remove("run"); // restart
+      // force reflow
+      void sparkle.offsetWidth;
+      sparkle.classList.add("run");
+      setTimeout(() => sparkle.classList.remove("run"), 950);
+    }
 
-    function scratch(e) {
-      const r = canvas.getBoundingClientRect();
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.beginPath();
-      ctx.arc(e.clientX - r.left, e.clientY - r.top, 18, 0, Math.PI*2);
-      ctx.fill();
+    function resetScratch() {
+      delete revealed[String(day)];
+      saveState();
+      initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+    }
 
-      if (!revealed[day]) {
-        revealed[day] = true;
-        save();
+    function attachScratch() {
+      // If already revealed: hide canvas
+      if (revealed[String(day)]) {
         canvas.classList.add("hidden");
+        canvas.style.pointerEvents = "none";
+        return;
       }
+
+      // If locked (only possible in admin OFF mode, but future cards are hidden.
+      // Still: keep safe guard.)
+      if (!unlocked) {
+        initScratchOverlay(canvas, ctx, `Disponibile dal ${day} dicembre`);
+        canvas.style.pointerEvents = "none";
+        return;
+      }
+
+      // Init overlay
+      initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+
+      let drawing = false;
+
+      function scratchAt(clientX, clientY) {
+        const r = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+
+        // map to device pixels
+        const x = (clientX - r.left) * dpr;
+        const y = (clientY - r.top) * dpr;
+
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.arc(x, y, 18 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function maybeReveal() {
+        const pct = computeScratchedPercent(ctx, canvas);
+        if (pct >= SCRATCH_THRESHOLD) reveal();
+      }
+
+      canvas.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        drawing = true;
+        try { canvas.setPointerCapture(e.pointerId); } catch {}
+        scratchAt(e.clientX, e.clientY);
+      });
+
+      canvas.addEventListener("pointermove", (e) => {
+        if (!drawing) return;
+        e.preventDefault();
+        scratchAt(e.clientX, e.clientY);
+      });
+
+      canvas.addEventListener("pointerup", (e) => {
+        if (!drawing) return;
+        drawing = false;
+        try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        maybeReveal();
+      });
+
+      canvas.addEventListener("pointerleave", () => {
+        if (!drawing) return;
+        drawing = false;
+        maybeReveal();
+      });
+
+      // Resize handling
+      window.addEventListener("resize", () => {
+        if (revealed[String(day)]) return;
+        if (!unlocked) return;
+        initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+      }, { passive:true });
     }
 
     renderGift();
-    revealed[day] ? canvas.classList.add("hidden") : initScratch();
+    attachScratch();
 
-    return { renderGift };
+    return { card, renderGift, resetScratch, isVisible:true };
   }
 
-  async function boot() {
-    try {
-      const res = await fetch(CONFIG_URL + "?v=" + Date.now());
-      const json = await res.json();
-      remoteGifts = json.gifts || {};
-    } catch {}
+  // ===== ADMIN =====
+  function setupAdmin(isAdmin, cardsByDay) {
+    if (!isAdmin) return;
 
-    const cards = {};
-    DAYS.forEach(d => cards[d] = createCard(d));
+    const admin = document.getElementById("admin");
+    admin.classList.remove("hidden");
 
-    // ADMIN
-    if (new URLSearchParams(location.search).get("test") === "fra") {
-      const admin = document.getElementById("admin");
-      admin.classList.remove("hidden");
+    const sel = document.getElementById("a-day");
+    const img = document.getElementById("a-img");
+    const cap = document.getElementById("a-cap");
 
-      const sel = document.getElementById("a-day");
-      const img = document.getElementById("a-img");
-      const cap = document.getElementById("a-cap");
+    // fill options
+    sel.innerHTML = "";
+    DAYS.forEach(d => {
+      const o = document.createElement("option");
+      o.value = String(d);
+      o.textContent = `Giorno ${d}`;
+      sel.appendChild(o);
+    });
 
-      DAYS.forEach(d => {
-        const o = document.createElement("option");
-        o.value = d; o.textContent = d;
-        sel.appendChild(o);
-      });
-
-      function load() {
-        const g = giftFor(sel.value);
-        img.value = g.imageUrl || "";
-        cap.value = g.caption || "";
-      }
-
-      sel.onchange = load;
-      load();
-
-      document.getElementById("a-save").onclick = () => {
-        overrides[sel.value] = { imageUrl: img.value, caption: cap.value };
-        save();
-        cards[sel.value].renderGift();
-        alert("Override salvato (locale)");
-      };
-
-      document.getElementById("a-clear").onclick = () => {
-        delete overrides[sel.value];
-        save();
-        cards[sel.value].renderGift();
-        alert("Override rimosso");
-      };
+    function loadForm() {
+      const day = sel.value;
+      const g = overrides[day] || remoteGifts[day] || {};
+      img.value = g.imageUrl || "";
+      cap.value = g.caption || "";
     }
+    sel.addEventListener("change", loadForm);
+    loadForm();
+
+    document.getElementById("a-save").onclick = () => {
+      overrides[sel.value] = {
+        imageUrl: img.value.trim(),
+        caption: cap.value.trim()
+      };
+      saveState();
+      cardsByDay.get(Number(sel.value))?.renderGift();
+      alert("Override salvato (locale).");
+    };
+
+    document.getElementById("a-clear").onclick = () => {
+      delete overrides[sel.value];
+      saveState();
+      cardsByDay.get(Number(sel.value))?.renderGift();
+      alert("Override rimosso.");
+    };
+
+    document.getElementById("a-reset").onclick = () => {
+      const dayNum = Number(sel.value);
+      cardsByDay.get(dayNum)?.resetScratch?.();
+      alert("Grattata resettata.");
+    };
+  }
+
+  // ===== BOOT =====
+  async function boot() {
+    // DOM safe
+    if (document.readyState === "loading") {
+      await new Promise(r => document.addEventListener("DOMContentLoaded", r, { once:true }));
+    }
+
+    const isAdmin = new URLSearchParams(location.search).get("test") === "fra";
+    const targetYear = (() => {
+      const y = Number(new URLSearchParams(location.search).get("year"));
+      if (Number.isFinite(y) && y > 2000 && y < 2100) return y;
+      return nowInRomeParts().year; // default: anno corrente Roma
+    })();
+
+    setMetaText(isAdmin, targetYear);
+
+    const calendarEl = ensureCalendarEl();
+    calendarEl.innerHTML = "";
+
+    remoteGifts = await fetchRemoteGifts();
+
+    const cardsByDay = new Map();
+
+    // Render days:
+    // - admin: show all 9 days
+    // - non-admin: hide future days completely
+    DAYS.forEach(day => {
+      const unlocked = isUnlocked(day, targetYear);
+      if (!isAdmin && !unlocked) return; // hide future day
+
+      const cardApi = createCard(day, { isAdmin, targetYear });
+      if (!cardApi || !cardApi.isVisible) return;
+      calendarEl.appendChild(cardApi.card);
+      cardsByDay.set(day, cardApi);
+    });
+
+    setupAdmin(isAdmin, cardsByDay);
   }
 
   boot();
