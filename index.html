@@ -105,6 +105,8 @@
       color:var(--muted);
       line-height:1.25rem;
     }
+
+    /* The scratch layer ALWAYS covers the content until revealed */
     canvas.scratch{
       position:absolute;
       inset:0;
@@ -113,6 +115,8 @@
       touch-action:none;
       cursor:pointer;
       transition:opacity .35s ease;
+      opacity:1;
+      pointer-events:auto;
     }
     canvas.scratch.hidden{
       opacity:0;
@@ -276,8 +280,8 @@
     </div>
 
     <div class="error-banner" id="errorBanner">
-      <strong>⚠️ Non riesco a caricare le immagini dal tuo JSON</strong><br />
-      Controlla che <code>gifts.json</code> esista nella root del sito e che gli URL delle immagini siano validi.
+      <strong>⚠️ Non riesco a caricare dal JSON</strong><br />
+      Assicurati che <code>gifts.json</code> esista nella stessa cartella di <code>index.html</code>.
     </div>
 
     <section id="calendar" class="calendar-grid"></section>
@@ -304,30 +308,25 @@
       <button id="a-reset" class="secondary">Reset grattata</button>
       <button id="a-reset-all" class="secondary">Reset tutte</button>
     </div>
-
-    <div style="margin-top:.4rem;opacity:.75;font-size:.74rem;line-height:1.1rem">
-      Nota: dal browser non posso scrivere su GitHub. Per rendere definitivo per Letizia,
-      aggiorna <code>gifts.json</code> nel repo.
-    </div>
   </div>
 
 <script>
 (() => {
   // ===== VERSIONING =====
-  const APP_VERSION = 5;
+  const APP_VERSION = 6;
   console.log("[Calendar] version =", APP_VERSION);
 
   // ===== CONFIG =====
   const DAYS = [16,17,18,19,20,21,22,23,24];
-  const CONFIG_URL = "./gifts.json"; // deve stare nella stessa cartella di index.html su GitHub Pages
+  const CONFIG_URL = "./gifts.json";
   const OVERRIDE_KEY = "calendar_overrides_v1";
-  const REVEALED_KEY = "calendar_revealed_v2";
+  const REVEALED_KEY = "calendar_revealed_v3"; // bump key to ensure covered by default
   const TIMEZONE = "Europe/Rome";
-  const SCRATCH_THRESHOLD = 55; // percent
+  const SCRATCH_THRESHOLD = 55;
 
-  // Non-admin: si possono grattare SOLO le caselle PRIMA del giorno corrente
-  // Admin (?test=fra): si può grattare tutto
-  const INCLUDE_TODAY_FOR_NON_ADMIN = false;
+  // Public mode rule: scratch reveals ONLY if day <= current day (Rome) AND month/year match.
+  // Admin (?test=fra): can reveal all.
+  const INCLUDE_TODAY_PUBLIC = true;
 
   // ===== LOCK MESSAGES (unique per giorno) =====
   const LOCK_MESSAGES = {
@@ -361,8 +360,7 @@
     };
   }
 
-  // returns true if day is scratchable for non-admin (December of target year)
-  function canScratchNonAdmin(dayNumber, baseYear, includeToday) {
+  function canRevealPublic(dayNumber, baseYear, includeToday) {
     const { year, month, day } = nowInRomeParts();
     const y = baseYear ?? year;
 
@@ -384,7 +382,6 @@
       <div>Versione: <strong>${APP_VERSION}</strong></div>
       <div>Oggi (Roma): <strong>${dd}/${mm}/${year}</strong></div>
       <div>Anno calendario: <strong>${targetYear}</strong></div>
-      <div>Regola: <strong>${INCLUDE_TODAY_FOR_NON_ADMIN ? "fino a oggi" : "solo prima di oggi"}</strong></div>
       ${isAdmin ? `<div style="margin-top:.25rem"><strong>Admin ON</strong></div>` : ""}
     `;
   }
@@ -419,12 +416,6 @@
     }
   }
 
-  // Validate image URL: if placeholder "https://..." or invalid hostname, show hint but don't break app.
-  function looksPlaceholderUrl(url) {
-    return !url || url.trim() === "" || url.includes("https://...") || url.includes("http://...");
-  }
-
-  // ===== UI =====
   function ensureCalendarEl() {
     let el = document.getElementById("calendar");
     if (!el) {
@@ -439,9 +430,7 @@
   function makeSparkle() {
     const s = document.createElement("div");
     s.className = "sparkle";
-    for (let i=0;i<12;i++){
-      s.appendChild(document.createElement("i"));
-    }
+    for (let i=0;i<12;i++) s.appendChild(document.createElement("i"));
     return s;
   }
 
@@ -486,7 +475,6 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // wrap text
     const maxWidth = w * 0.82;
     const words = String(labelText).split(" ");
     let line = "";
@@ -560,7 +548,7 @@
 
     function renderGift() {
       const g = giftFor(day);
-      if (g.imageUrl && !looksPlaceholderUrl(g.imageUrl)) {
+      if (g.imageUrl) {
         img.src = g.imageUrl;
         img.classList.remove("placeholder");
       } else {
@@ -570,14 +558,13 @@
       cap.textContent = g.caption || `Regalino del ${day} dicembre ✨`;
     }
 
-    // Always start covered unless already revealed
     function isRevealed() {
       return Boolean(revealed[String(day)]);
     }
 
-    function canScratchThisCard() {
+    function isRevealAllowedNow() {
       if (isAdmin) return true;
-      return canScratchNonAdmin(day, targetYear, INCLUDE_TODAY_FOR_NON_ADMIN);
+      return canRevealPublic(day, targetYear, INCLUDE_TODAY_PUBLIC);
     }
 
     function reveal() {
@@ -592,8 +579,9 @@
     }
 
     function bindScratch(c, cctx) {
-      initScratchOverlay(c, cctx, `Gratta il ${day}`);
-
+      // IMPORTANT: even for locked days we allow "scratching", but it should not reveal.
+      // For locked, we draw a message and allow scratching that only clears *a little* then restores.
+      // To keep it simple: locked days = scratching does nothing (overlay stays intact).
       let drawing = false;
 
       function scratchAt(clientX, clientY) {
@@ -608,7 +596,17 @@
         cctx.fill();
       }
 
-      function maybeReveal() {
+      function maybeRevealOrResetOverlay() {
+        const allowed = isRevealAllowedNow();
+        if (!allowed) {
+          // Not allowed: restore overlay immediately (so "doesn't come out")
+          const msg = lockMessageForDay(day);
+          initScratchOverlay(c, cctx, msg);
+          c.style.pointerEvents = "auto";
+          setLockedHint(msg);
+          return;
+        }
+
         const pct = computeScratchedPercent(cctx, c);
         if (pct >= SCRATCH_THRESHOLD) reveal();
       }
@@ -630,24 +628,25 @@
         if (!drawing) return;
         drawing = false;
         try { c.releasePointerCapture(e.pointerId); } catch {}
-        maybeReveal();
+        maybeRevealOrResetOverlay();
       });
 
       c.addEventListener("pointerleave", () => {
         if (!drawing) return;
         drawing = false;
-        maybeReveal();
+        maybeRevealOrResetOverlay();
       });
 
       window.addEventListener("resize", () => {
         if (isRevealed()) return;
-        if (!canScratchThisCard()) return;
-        initScratchOverlay(c, cctx, `Gratta il ${day}`);
+        const allowed = isRevealAllowedNow();
+        initScratchOverlay(c, cctx, allowed ? `Gratta il ${day}` : lockMessageForDay(day));
+        if (!allowed) setLockedHint(lockMessageForDay(day));
       }, { passive:true });
     }
 
     function attachOverlay() {
-      // Always covered unless revealed
+      // Always cover unless revealed
       if (isRevealed()) {
         canvas.classList.add("hidden");
         canvas.style.pointerEvents = "none";
@@ -655,20 +654,20 @@
         return;
       }
 
-      // Not revealed -> show overlay
+      // Not revealed -> ALWAYS show overlay
       canvas.classList.remove("hidden");
-      const scratchable = canScratchThisCard();
+      canvas.style.pointerEvents = "auto";
 
-      if (!scratchable) {
+      const allowed = isRevealAllowedNow();
+      if (allowed) {
+        clearLockedHint();
+        initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+      } else {
         const msg = lockMessageForDay(day);
         initScratchOverlay(canvas, ctx, msg);
-        canvas.style.pointerEvents = "none";
         setLockedHint(msg);
-        return;
       }
 
-      clearLockedHint();
-      canvas.style.pointerEvents = "auto";
       bindScratch(canvas, ctx);
     }
 
@@ -691,7 +690,6 @@
     return { card, renderGift, resetScratch, attachOverlay };
   }
 
-  // ===== ADMIN =====
   function setupAdmin(isAdmin, cardsByDay) {
     if (!isAdmin) return;
 
@@ -727,7 +725,6 @@
       saveState();
       const api = cardsByDay.get(Number(sel.value));
       api?.renderGift();
-      // keep covered unless already revealed
       api?.attachOverlay();
       alert("Override salvato (locale).");
     };
@@ -755,7 +752,6 @@
     };
   }
 
-  // ===== BOOT =====
   async function boot() {
     if (document.readyState === "loading") {
       await new Promise(r => document.addEventListener("DOMContentLoaded", r, { once:true }));
@@ -779,7 +775,6 @@
 
     const cardsByDay = new Map();
 
-    // Always show ALL days (16..24) and ALWAYS cover unless revealed.
     DAYS.forEach(day => {
       const api = createCard(day, { isAdmin, targetYear });
       calendarEl.appendChild(api.card);
