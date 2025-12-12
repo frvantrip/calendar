@@ -118,20 +118,17 @@
       opacity:0;
       pointer-events:none;
     }
-    /* Locked overlay (for non-admin only if we decide to show future; now we hide future entirely,
-       but keeping for safety) */
-    .locked-overlay{
+
+    /* Locked overlay text (drawn on canvas too, but keep style for consistency) */
+    .locked-hint{
       position:absolute;
-      inset:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
+      inset:auto 0 0 0;
+      padding:.45rem .6rem;
+      font-size:.75rem;
+      color:rgba(255,255,255,.92);
+      background:linear-gradient(135deg, rgba(140,43,43,.85), rgba(204,75,75,.75));
       text-align:center;
-      padding:1rem;
-      color:#fff;
-      background:linear-gradient(135deg, rgba(140,43,43,.92), rgba(204,75,75,.85));
-      font-weight:750;
-      letter-spacing:.02em;
+      pointer-events:none;
     }
 
     /* Sparkle burst */
@@ -305,11 +302,11 @@
 
   // ===== CONFIG =====
   const DAYS = [16,17,18,19,20,21,22,23,24];
-  const CONFIG_URL = "./gifts.json";   // stesso repo
+  const CONFIG_URL = "./gifts.json";
   const OVERRIDE_KEY = "calendar_overrides_v1";
   const REVEALED_KEY = "calendar_revealed_v1";
   const TIMEZONE = "Europe/Rome";
-  const SCRATCH_THRESHOLD = 55; // percento area grattata per rivelare
+  const SCRATCH_THRESHOLD = 55; // percent
 
   // ===== HELPERS =====
   function safeJsonParse(str, fallback) {
@@ -333,25 +330,21 @@
   function isUnlocked(dayNumber, baseYear) {
     const { year, month, day } = nowInRomeParts();
     const y = baseYear ?? year;
-    // Sblocco SOLO a dicembre dell'anno target. Se anno diverso, consideriamo:
-    // - se siamo oltre quell'anno -> sbloccato
-    // - se siamo prima -> bloccato
+
     if (year > y) return true;
     if (year < y) return false;
 
-    // stesso anno
     if (month > 12) return true;
     if (month < 12) return false;
 
-    // dicembre
     return day >= dayNumber;
   }
 
   function setMetaText(isAdmin, targetYear) {
     const { year, month, day } = nowInRomeParts();
-    const meta = document.getElementById("meta");
     const mm = String(month).padStart(2,"0");
     const dd = String(day).padStart(2,"0");
+    const meta = document.getElementById("meta");
     meta.innerHTML = `
       <div>Versione: <strong>${APP_VERSION}</strong></div>
       <div>Oggi (Roma): <strong>${dd}/${mm}/${year}</strong></div>
@@ -387,7 +380,7 @@
     }
   }
 
-  // ===== UI BUILD =====
+  // ===== UI =====
   function ensureCalendarEl() {
     let el = document.getElementById("calendar");
     if (!el) {
@@ -402,10 +395,8 @@
   function makeSparkle() {
     const s = document.createElement("div");
     s.className = "sparkle";
-    // 12 rays
     for (let i=0;i<12;i++){
-      const ray = document.createElement("i");
-      s.appendChild(ray);
+      s.appendChild(document.createElement("i"));
     }
     return s;
   }
@@ -438,8 +429,8 @@
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // draw in device pixels
     const w = canvas.width, h = canvas.height;
+
     const grad = ctx.createLinearGradient(0,0,w,h);
     grad.addColorStop(0, "#b54a4a");
     grad.addColorStop(1, "#8c2b2b");
@@ -457,7 +448,7 @@
   }
 
   function createCard(day, opts) {
-    const { isAdmin, targetYear, onRendered } = opts;
+    const { isAdmin, targetYear } = opts;
 
     const card = document.createElement("article");
     card.className = "day-card";
@@ -486,6 +477,22 @@
     const sparkle = makeSparkle();
     container.appendChild(sparkle);
 
+    let lockedHintEl = null;
+
+    function setLockedHint(text) {
+      if (!lockedHintEl) {
+        lockedHintEl = document.createElement("div");
+        lockedHintEl.className = "locked-hint";
+        container.appendChild(lockedHintEl);
+      }
+      lockedHintEl.textContent = text;
+      lockedHintEl.style.display = "block";
+    }
+
+    function clearLockedHint() {
+      if (lockedHintEl) lockedHintEl.style.display = "none";
+    }
+
     function renderGift() {
       const g = giftFor(day);
       if (g.imageUrl) {
@@ -496,27 +503,17 @@
         img.classList.add("placeholder");
       }
       cap.textContent = g.caption || `Regalino del ${day} dicembre ✨`;
-      onRendered && onRendered(day);
     }
 
-    // Lock / hide logic
-    const unlocked = isAdmin ? true : isUnlocked(day, targetYear);
-
-    // If not admin, hide future days entirely
-    if (!isAdmin && !unlocked) {
-      // We don't append this card at all (handled outside),
-      // but keep guard just in case.
-      return { card, renderGift, attachScratch: () => {} , isVisible:false };
-    }
+    const unlockedForUser = isAdmin ? true : isUnlocked(day, targetYear);
 
     function reveal() {
       revealed[String(day)] = true;
       saveState();
       canvas.classList.add("hidden");
 
-      // sparkle animation
-      sparkle.classList.remove("run"); // restart
-      // force reflow
+      // sparkle
+      sparkle.classList.remove("run");
       void sparkle.offsetWidth;
       sparkle.classList.add("run");
       setTimeout(() => sparkle.classList.remove("run"), 950);
@@ -525,87 +522,109 @@
     function resetScratch() {
       delete revealed[String(day)];
       saveState();
-      initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+      // re-init overlay based on lock/unlock
+      attachScratch(true);
     }
 
-    function attachScratch() {
-      // If already revealed: hide canvas
+    function attachScratch(forceReinit = false) {
+      // already revealed
       if (revealed[String(day)]) {
         canvas.classList.add("hidden");
         canvas.style.pointerEvents = "none";
+        clearLockedHint();
         return;
       }
 
-      // If locked (only possible in admin OFF mode, but future cards are hidden.
-      // Still: keep safe guard.)
-      if (!unlocked) {
+      // if locked (non-admin future day): show overlay but disable scratching
+      if (!unlockedForUser) {
         initScratchOverlay(canvas, ctx, `Disponibile dal ${day} dicembre`);
         canvas.style.pointerEvents = "none";
+        canvas.classList.remove("hidden");
+        setLockedHint(`Si sblocca il ${day} dicembre`);
         return;
       }
 
-      // Init overlay
-      initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+      // unlocked: normal scratch
+      clearLockedHint();
+      if (forceReinit) {
+        // remove old listeners by cloning canvas (simple & safe)
+        const newCanvas = canvas.cloneNode(true);
+        canvas.parentElement.replaceChild(newCanvas, canvas);
+        // update refs
+        // NOTE: after replace, we must re-bind
+        const c2 = newCanvas;
+        const ctx2 = c2.getContext("2d");
+        // overwrite outer scoped vars
+        // (we just re-run init + listeners using inner function)
+        // To keep code simple, we re-enter by calling internal binder:
+        bindScratch(c2, ctx2);
+        return;
+      }
+
+      bindScratch(canvas, ctx);
+    }
+
+    function bindScratch(c, cctx) {
+      // init overlay each time we bind (safe on resize too)
+      initScratchOverlay(c, cctx, `Gratta il ${day}`);
 
       let drawing = false;
 
       function scratchAt(clientX, clientY) {
-        const r = canvas.getBoundingClientRect();
+        const r = c.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-
-        // map to device pixels
         const x = (clientX - r.left) * dpr;
         const y = (clientY - r.top) * dpr;
 
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.beginPath();
-        ctx.arc(x, y, 18 * dpr, 0, Math.PI * 2);
-        ctx.fill();
+        cctx.globalCompositeOperation = "destination-out";
+        cctx.beginPath();
+        cctx.arc(x, y, 18 * dpr, 0, Math.PI * 2);
+        cctx.fill();
       }
 
       function maybeReveal() {
-        const pct = computeScratchedPercent(ctx, canvas);
+        const pct = computeScratchedPercent(cctx, c);
         if (pct >= SCRATCH_THRESHOLD) reveal();
       }
 
-      canvas.addEventListener("pointerdown", (e) => {
+      c.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         drawing = true;
-        try { canvas.setPointerCapture(e.pointerId); } catch {}
+        try { c.setPointerCapture(e.pointerId); } catch {}
         scratchAt(e.clientX, e.clientY);
       });
 
-      canvas.addEventListener("pointermove", (e) => {
+      c.addEventListener("pointermove", (e) => {
         if (!drawing) return;
         e.preventDefault();
         scratchAt(e.clientX, e.clientY);
       });
 
-      canvas.addEventListener("pointerup", (e) => {
+      c.addEventListener("pointerup", (e) => {
         if (!drawing) return;
         drawing = false;
-        try { canvas.releasePointerCapture(e.pointerId); } catch {}
+        try { c.releasePointerCapture(e.pointerId); } catch {}
         maybeReveal();
       });
 
-      canvas.addEventListener("pointerleave", () => {
+      c.addEventListener("pointerleave", () => {
         if (!drawing) return;
         drawing = false;
         maybeReveal();
       });
 
-      // Resize handling
+      // resize
       window.addEventListener("resize", () => {
         if (revealed[String(day)]) return;
-        if (!unlocked) return;
-        initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+        if (!unlockedForUser) return;
+        initScratchOverlay(c, cctx, `Gratta il ${day}`);
       }, { passive:true });
     }
 
     renderGift();
-    attachScratch();
+    attachScratch(false);
 
-    return { card, renderGift, resetScratch, isVisible:true };
+    return { card, renderGift, resetScratch };
   }
 
   // ===== ADMIN =====
@@ -619,7 +638,6 @@
     const img = document.getElementById("a-img");
     const cap = document.getElementById("a-cap");
 
-    // fill options
     sel.innerHTML = "";
     DAYS.forEach(d => {
       const o = document.createElement("option");
@@ -663,7 +681,6 @@
 
   // ===== BOOT =====
   async function boot() {
-    // DOM safe
     if (document.readyState === "loading") {
       await new Promise(r => document.addEventListener("DOMContentLoaded", r, { once:true }));
     }
@@ -672,7 +689,7 @@
     const targetYear = (() => {
       const y = Number(new URLSearchParams(location.search).get("year"));
       if (Number.isFinite(y) && y > 2000 && y < 2100) return y;
-      return nowInRomeParts().year; // default: anno corrente Roma
+      return nowInRomeParts().year;
     })();
 
     setMetaText(isAdmin, targetYear);
@@ -684,17 +701,11 @@
 
     const cardsByDay = new Map();
 
-    // Render days:
-    // - admin: show all 9 days
-    // - non-admin: hide future days completely
+    // Show ALWAYS all days, but allow scratching only up to current day (unless admin)
     DAYS.forEach(day => {
-      const unlocked = isUnlocked(day, targetYear);
-      if (!isAdmin && !unlocked) return; // hide future day
-
-      const cardApi = createCard(day, { isAdmin, targetYear });
-      if (!cardApi || !cardApi.isVisible) return;
-      calendarEl.appendChild(cardApi.card);
-      cardsByDay.set(day, cardApi);
+      const api = createCard(day, { isAdmin, targetYear });
+      calendarEl.appendChild(api.card);
+      cardsByDay.set(day, api);
     });
 
     setupAdmin(isAdmin, cardsByDay);
