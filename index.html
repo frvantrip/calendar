@@ -285,6 +285,7 @@
       <button id="a-save" class="primary">Salva override locale</button>
       <button id="a-clear" class="secondary">Rimuovi override</button>
       <button id="a-reset" class="secondary">Reset grattata</button>
+      <button id="a-reset-all" class="secondary">Reset tutte</button>
     </div>
 
     <div style="margin-top:.4rem;opacity:.75;font-size:.74rem;line-height:1.1rem">
@@ -296,19 +297,18 @@
 <script>
 (() => {
   // ===== VERSIONING =====
-  const APP_VERSION = 3;
+  const APP_VERSION = 4;
   console.log("[Calendar] version =", APP_VERSION);
 
   // ===== CONFIG =====
   const DAYS = [16,17,18,19,20,21,22,23,24];
   const CONFIG_URL = "./gifts.json";
   const OVERRIDE_KEY = "calendar_overrides_v1";
-  const REVEALED_KEY = "calendar_revealed_v1";
+  const REVEALED_KEY = "calendar_revealed_v2"; // bump key to avoid old "all revealed" state
   const TIMEZONE = "Europe/Rome";
   const SCRATCH_THRESHOLD = 55; // percent
 
   // ===== LOCK MESSAGES (unique per giorno) =====
-  // Testi pensati per quando quel giorno NON è ancora disponibile.
   const LOCK_MESSAGES = {
     "16": "Ehi Le 😄 oggi no: si apre il 16!",
     "17": "Dai Le, aspetta il 17 😌",
@@ -340,7 +340,9 @@
     };
   }
 
-  function isUnlocked(dayNumber, baseYear) {
+  // Unlocked means: day strictly BEFORE current day (per tua richiesta),
+  // except admin which can always scratch everything.
+  function canScratchTodayOrBefore(dayNumber, baseYear, includeToday) {
     const { year, month, day } = nowInRomeParts();
     const y = baseYear ?? year;
 
@@ -350,10 +352,11 @@
     if (month > 12) return true;
     if (month < 12) return false;
 
-    return day >= dayNumber;
+    // December same year:
+    return includeToday ? (day >= dayNumber) : (day > dayNumber);
   }
 
-  function setMetaText(isAdmin, targetYear) {
+  function setMetaText(isAdmin, targetYear, includeToday) {
     const { year, month, day } = nowInRomeParts();
     const mm = String(month).padStart(2,"0");
     const dd = String(day).padStart(2,"0");
@@ -362,6 +365,7 @@
       <div>Versione: <strong>${APP_VERSION}</strong></div>
       <div>Oggi (Roma): <strong>${dd}/${mm}/${year}</strong></div>
       <div>Anno calendario: <strong>${targetYear}</strong></div>
+      <div>Sblocco: <strong>${includeToday ? "oggi incluso" : "solo giorni prima di oggi"}</strong></div>
       ${isAdmin ? `<div style="margin-top:.25rem"><strong>Admin ON</strong></div>` : ""}
     `;
   }
@@ -455,8 +459,8 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // multi-line wrap (simple)
-    const maxWidth = w * 0.8;
+    // wrap text
+    const maxWidth = w * 0.82;
     const words = String(labelText).split(" ");
     let line = "";
     const lines = [];
@@ -479,8 +483,12 @@
     canvas.style.pointerEvents = "auto";
   }
 
+  function lockMessageForDay(dayNum) {
+    return LOCK_MESSAGES[String(dayNum)] || `Dai Le, aspetta il ${dayNum} 😉`;
+  }
+
   function createCard(day, opts) {
-    const { isAdmin, targetYear } = opts;
+    const { isAdmin, targetYear, includeToday } = opts;
 
     const card = document.createElement("article");
     card.className = "day-card";
@@ -503,14 +511,13 @@
     const container = card.querySelector(".scratch-container");
     const img = card.querySelector(".gift-image");
     const cap = card.querySelector(".gift-caption");
-    const canvas = card.querySelector("canvas.scratch");
-    const ctx = canvas.getContext("2d");
+    let canvas = card.querySelector("canvas.scratch");
+    let ctx = canvas.getContext("2d");
 
     const sparkle = makeSparkle();
     container.appendChild(sparkle);
 
     let lockedHintEl = null;
-
     function setLockedHint(text) {
       if (!lockedHintEl) {
         lockedHintEl = document.createElement("div");
@@ -520,13 +527,8 @@
       lockedHintEl.textContent = text;
       lockedHintEl.style.display = "block";
     }
-
     function clearLockedHint() {
       if (lockedHintEl) lockedHintEl.style.display = "none";
-    }
-
-    function lockMessageForDay(dayNum) {
-      return LOCK_MESSAGES[String(dayNum)] || `Dai Le, aspetta il ${dayNum} 😉`;
     }
 
     function renderGift() {
@@ -541,10 +543,10 @@
       cap.textContent = g.caption || `Regalino del ${day} dicembre ✨`;
     }
 
-    // IMPORTANT:
-    // - Admin can always scratch
-    // - Non-admin can scratch only if unlocked (today or past)
-    const unlockedForUser = isAdmin ? true : isUnlocked(day, targetYear);
+    // ===== IMPORTANT LOGIC =====
+    // - Non-admin: can scratch ONLY days strictly before today (as you asked)
+    // - Admin: can scratch EVERYTHING
+    const canScratch = isAdmin ? true : canScratchTodayOrBefore(day, targetYear, includeToday);
 
     function reveal() {
       revealed[String(day)] = true;
@@ -607,12 +609,13 @@
 
       window.addEventListener("resize", () => {
         if (revealed[String(day)]) return;
-        if (!unlockedForUser) return;
+        if (!canScratch) return;
         initScratchOverlay(c, cctx, `Gratta il ${day}`);
       }, { passive:true });
     }
 
-    function attachScratch(forceReinit = false) {
+    function attachOverlay() {
+      // Always cover unless already revealed
       if (revealed[String(day)]) {
         canvas.classList.add("hidden");
         canvas.style.pointerEvents = "none";
@@ -620,37 +623,38 @@
         return;
       }
 
-      if (!unlockedForUser) {
+      // Locked (non-admin future or same-day if includeToday=false): cover + message + no scratching
+      if (!canScratch) {
         const msg = lockMessageForDay(day);
         initScratchOverlay(canvas, ctx, msg);
-        canvas.style.pointerEvents = "none";
         canvas.classList.remove("hidden");
+        canvas.style.pointerEvents = "none";
         setLockedHint(msg);
         return;
       }
 
+      // Scratchable: cover with scratch layer + allow interaction
       clearLockedHint();
-
-      if (forceReinit) {
-        const newCanvas = canvas.cloneNode(true);
-        canvas.parentElement.replaceChild(newCanvas, canvas);
-        const c2 = newCanvas;
-        const ctx2 = c2.getContext("2d");
-        bindScratch(c2, ctx2);
-        return;
-      }
-
+      canvas.style.pointerEvents = "auto";
+      canvas.classList.remove("hidden");
       bindScratch(canvas, ctx);
     }
 
     function resetScratch() {
       delete revealed[String(day)];
       saveState();
-      attachScratch(true);
+
+      // Recreate canvas to clear old listeners
+      const newCanvas = canvas.cloneNode(true);
+      canvas.parentElement.replaceChild(newCanvas, canvas);
+      canvas = newCanvas;
+      ctx = canvas.getContext("2d");
+
+      attachOverlay();
     }
 
     renderGift();
-    attachScratch(false);
+    attachOverlay();
 
     return { card, renderGift, resetScratch };
   }
@@ -705,6 +709,14 @@
       cardsByDay.get(dayNum)?.resetScratch?.();
       alert("Grattata resettata.");
     };
+
+    document.getElementById("a-reset-all").onclick = () => {
+      for (const k of Object.keys(revealed)) delete revealed[k];
+      saveState();
+      // re-render overlays
+      DAYS.forEach(d => cardsByDay.get(d)?.resetScratch?.());
+      alert("Tutte le grattate resettate.");
+    };
   }
 
   // ===== BOOT =====
@@ -713,14 +725,20 @@
       await new Promise(r => document.addEventListener("DOMContentLoaded", r, { once:true }));
     }
 
-    const isAdmin = new URLSearchParams(location.search).get("test") === "fra";
+    const params = new URLSearchParams(location.search);
+    const isAdmin = params.get("test") === "fra";
+
+    // Per tua richiesta: NON si gratta il giorno corrente, solo i giorni prima.
+    // Se vuoi includere anche oggi, cambia a true.
+    const includeToday = false;
+
     const targetYear = (() => {
-      const y = Number(new URLSearchParams(location.search).get("year"));
+      const y = Number(params.get("year"));
       if (Number.isFinite(y) && y > 2000 && y < 2100) return y;
       return nowInRomeParts().year;
     })();
 
-    setMetaText(isAdmin, targetYear);
+    setMetaText(isAdmin, targetYear, includeToday);
 
     const calendarEl = ensureCalendarEl();
     calendarEl.innerHTML = "";
@@ -729,9 +747,9 @@
 
     const cardsByDay = new Map();
 
-    // Always show all days; only allow scratch up to current day (unless admin)
+    // Always show ALL days (16..24)
     DAYS.forEach(day => {
-      const api = createCard(day, { isAdmin, targetYear });
+      const api = createCard(day, { isAdmin, targetYear, includeToday });
       calendarEl.appendChild(api.card);
       cardsByDay.set(day, api);
     });
