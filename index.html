@@ -45,7 +45,6 @@
       gap:1rem;
       margin-bottom:.75rem;
     }
-    /* meta removed from UI in v8 (kept only in console) */
     .meta{display:none}
 
     .calendar-grid{
@@ -327,7 +326,6 @@
   console.log("[Calendar] version =", APP_VERSION);
 
   // ===== CONFIG =====
-  // v8: days 18..25 (8 giorni)
   const DAYS = [18,19,20,21,22,23,24,25];
   const CONFIG_URL = "./gifts.json";
   const OVERRIDE_KEY = "calendar_overrides_v1";
@@ -337,7 +335,7 @@
   const SCRATCH_THRESHOLD = 85;
   const INCLUDE_TODAY_PUBLIC = true;
 
-  // lock messages updated for 18..25
+  // No "amore" in descriptions
   const LOCK_MESSAGES = {
     "18": "Dai Le, aspetta il 18 👀",
     "19": "Piano piano… il 19 arriva 💛",
@@ -346,24 +344,14 @@
     "22": "Resisti… manca poco al 22 😍",
     "23": "Quasi! Il 23 è dietro l’angolo 🎁",
     "24": "Il gran finale è il 24 🎄",
-    "25": "Buon Natale amore ❤️ si apre il 25"
+    "25": "Buon Natale 🎁 si apre il 25"
   };
 
   // ===== STORAGE (localStorage + cookie fallback) =====
-  function safeJsonParse(str, fallback) {
-    try { return JSON.parse(str); } catch { return fallback; }
-  }
-  function storageGet(key, fallback) {
-    try {
-      const v = localStorage.getItem(key);
-      return v == null ? fallback : v;
-    } catch {
-      return fallback;
-    }
-  }
-  function storageSet(key, value) {
-    try { localStorage.setItem(key, value); return true; } catch { return false; }
-  }
+  function safeJsonParse(str, fallback) { try { return JSON.parse(str); } catch { return fallback; } }
+  function storageGet(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : v; } catch { return fallback; } }
+  function storageSet(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } }
+
   function setCookie(name, value, days) {
     try {
       const d = new Date();
@@ -452,22 +440,13 @@
   }
 
   // ===== UI =====
-  function ensureCalendarEl() {
-    let el = document.getElementById("calendar");
-    if (!el) {
-      el = document.createElement("section");
-      el.id = "calendar";
-      el.className = "calendar-grid";
-      document.querySelector("main")?.appendChild(el) || document.body.appendChild(el);
-    }
-    return el;
-  }
   function makeSparkle() {
     const s = document.createElement("div");
     s.className = "sparkle";
     for (let i=0;i<12;i++) s.appendChild(document.createElement("i"));
     return s;
   }
+
   function computeScratchedPercentSample(ctx, canvas) {
     try {
       const w = canvas.width, h = canvas.height;
@@ -536,7 +515,6 @@
     const { year, month, day } = nowInRomeParts();
     const mm = String(month).padStart(2,"0");
     const dd = String(day).padStart(2,"0");
-    const revealedCount = Object.keys(revealed).filter(k => revealed[k]).length;
 
     let lsOk = true;
     try { const t="__t"; localStorage.setItem(t,"1"); localStorage.removeItem(t); } catch { lsOk = false; }
@@ -545,7 +523,7 @@
       version: APP_VERSION,
       todayRome: `${dd}/${mm}/${year}`,
       targetYear,
-      revealedCount,
+      days: DAYS.join(","),
       localStorage: lsOk ? "ok" : "blocked",
       admin: isAdmin
     });
@@ -591,9 +569,7 @@
       lockedHintEl.textContent = text;
       lockedHintEl.style.display = "block";
     }
-    function clearLockedHint() {
-      if (lockedHintEl) lockedHintEl.style.display = "none";
-    }
+    function clearLockedHint() { if (lockedHintEl) lockedHintEl.style.display = "none"; }
 
     function renderGift() {
       const g = giftFor(day);
