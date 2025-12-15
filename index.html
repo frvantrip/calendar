@@ -131,11 +131,13 @@
       inset:0;
       width:100%;
       height:100%;
+      display:block;           /* IMPORTANT: helps iOS standalone */
       touch-action:none;
       cursor:pointer;
       transition:opacity .35s ease;
       opacity:1;
       pointer-events:auto;
+      background:transparent;
     }
     canvas.scratch.hidden{
       opacity:0;
@@ -358,7 +360,6 @@
     </div>
   </div>
 
-  <!-- iOS A2HS helper -->
   <div id="a2hs">
     <h3>Metti il calendario in Home</h3>
     <p>
@@ -373,21 +374,18 @@
 
 <script>
 (() => {
-  // ===== VERSIONING =====
-  const APP_VERSION = 8;
+  const APP_VERSION = 9;
   console.log("[Calendar] version =", APP_VERSION);
 
-  // ===== CONFIG =====
   const DAYS = [18,19,20,21,22,23,24,25];
   const CONFIG_URL = "./gifts.json";
   const OVERRIDE_KEY = "calendar_overrides_v1";
-  const REVEALED_KEY = "calendar_revealed_v8";
-  const REVEALED_COOKIE = "cal_revealed_v8";
+  const REVEALED_KEY = "calendar_revealed_v9";
+  const REVEALED_COOKIE = "cal_revealed_v9";
   const TIMEZONE = "Europe/Rome";
   const SCRATCH_THRESHOLD = 85;
   const INCLUDE_TODAY_PUBLIC = true;
 
-  // No "amore" in descriptions
   const LOCK_MESSAGES = {
     "18": "Dai Le, aspetta il 18 👀",
     "19": "Piano piano… il 19 arriva 💛",
@@ -399,14 +397,13 @@
     "25": "Buon Natale 🎁 si apre il 25"
   };
 
-  // ===== A2HS (iOS) helper =====
+  // A2HS helper
   const A2HS_KEY = "calendar_a2hs_dismissed_v1";
   function isIOS() {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
   function isStandalone() {
-    // iOS Safari
     return (window.navigator.standalone === true) ||
            (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
   }
@@ -426,7 +423,7 @@
     } catch {}
   }
 
-  // ===== STORAGE (localStorage + cookie fallback) =====
+  // Storage
   function safeJsonParse(str, fallback) { try { return JSON.parse(str); } catch { return fallback; } }
   function storageGet(key, fallback) { try { const v = localStorage.getItem(key); return v == null ? fallback : v; } catch { return fallback; } }
   function storageSet(key, value) { try { localStorage.setItem(key, value); return true; } catch { return false; } }
@@ -460,7 +457,7 @@
     setCookie(REVEALED_COOKIE, list.join(","), 400);
   }
 
-  // ===== TIME =====
+  // Time
   function nowInRomeParts() {
     const fmt = new Intl.DateTimeFormat("it-IT", { timeZone: TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" });
     const parts = fmt.formatToParts(new Date());
@@ -480,7 +477,7 @@
     return LOCK_MESSAGES[String(dayNum)] || `Dai Le, aspetta il ${dayNum} 😉`;
   }
 
-  // ===== STATE =====
+  // State
   const overrides = safeJsonParse(storageGet(OVERRIDE_KEY, "{}"), {});
   const revealedFromLS = safeJsonParse(storageGet(REVEALED_KEY, "{}"), {});
   const revealedFromCookie = loadRevealedFromCookie();
@@ -518,7 +515,7 @@
     }
   }
 
-  // ===== UI helpers =====
+  // UI helpers
   function makeSparkle() {
     const s = document.createElement("div");
     s.className = "sparkle";
@@ -543,13 +540,23 @@
     } catch { return 0; }
   }
 
+  // returns true if actually drew (non-zero size), false if needs retry
   function initScratchOverlay(canvas, ctx, labelText) {
-    const rect = canvas.parentElement.getBoundingClientRect();
+    const parent = canvas.parentElement;
+    if (!parent) return false;
+
+    const rect = parent.getBoundingClientRect();
+    // iOS standalone sometimes gives 0 here on first tick → retry later
+    const wCss = rect.width || parent.clientWidth || parent.offsetWidth;
+    const hCss = rect.height || parent.clientHeight || parent.offsetHeight;
+
+    if (!wCss || !hCss || wCss < 20 || hCss < 20) return false;
+
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    canvas.style.width = rect.width + "px";
-    canvas.style.height = rect.height + "px";
+    canvas.width = Math.max(1, Math.floor(wCss * dpr));
+    canvas.height = Math.max(1, Math.floor(hCss * dpr));
+    canvas.style.width = wCss + "px";
+    canvas.style.height = hCss + "px";
 
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -587,23 +594,29 @@
 
     canvas.classList.remove("hidden");
     canvas.style.pointerEvents = "auto";
+    return true;
   }
 
-  // ===== LOG ONLY =====
+  // robust draw: retries for a few frames (fixes iOS standalone blank overlay)
+  function drawOverlayWithRetry(canvas, ctx, labelText, tries = 18) {
+    const ok = initScratchOverlay(canvas, ctx, labelText);
+    if (ok) return;
+    if (tries <= 0) {
+      console.warn("[Calendar] overlay draw failed (size 0) for", canvas);
+      return;
+    }
+    requestAnimationFrame(() => drawOverlayWithRetry(canvas, ctx, labelText, tries - 1));
+  }
+
   function logMeta(isAdmin, targetYear) {
     const { year, month, day } = nowInRomeParts();
     const mm = String(month).padStart(2,"0");
     const dd = String(day).padStart(2,"0");
-
-    let lsOk = true;
-    try { const t="__t"; localStorage.setItem(t,"1"); localStorage.removeItem(t); } catch { lsOk = false; }
-
     console.log("[Calendar meta]", {
       version: APP_VERSION,
       todayRome: `${dd}/${mm}/${year}`,
       targetYear,
       days: DAYS.join(","),
-      localStorage: lsOk ? "ok" : "blocked",
       admin: isAdmin,
       standalone: isStandalone()
     });
@@ -659,12 +672,10 @@
     }
 
     function isRevealed() { return !!revealed[String(day)]; }
-
     function isRevealAllowedNow() {
       if (isAdmin) return true;
       return canRevealPublic(day, targetYear, INCLUDE_TODAY_PUBLIC);
     }
-
     function setRevealedUI(on) {
       if (on) container.classList.add("revealed");
       else container.classList.remove("revealed");
@@ -703,7 +714,7 @@
 
         if (!allowed) {
           const msg = lockMessageForDay(day);
-          initScratchOverlay(c, cctx, msg);
+          drawOverlayWithRetry(c, cctx, msg);
           setRevealedUI(false);
           setLockedHint(msg);
           return;
@@ -741,7 +752,7 @@
       window.addEventListener("resize", () => {
         if (isRevealed()) return;
         const allowed = isRevealAllowedNow();
-        initScratchOverlay(c, cctx, allowed ? `Gratta il ${day}` : lockMessageForDay(day));
+        drawOverlayWithRetry(c, cctx, allowed ? `Gratta il ${day}` : lockMessageForDay(day));
         if (!allowed) setLockedHint(lockMessageForDay(day));
       }, { passive:true });
     }
@@ -762,10 +773,11 @@
       const allowed = isRevealAllowedNow();
       if (allowed) {
         clearLockedHint();
-        initScratchOverlay(canvas, ctx, `Gratta il ${day}`);
+        // important: draw after layout
+        drawOverlayWithRetry(canvas, ctx, `Gratta il ${day}`);
       } else {
         const msg = lockMessageForDay(day);
-        initScratchOverlay(canvas, ctx, msg);
+        drawOverlayWithRetry(canvas, ctx, msg);
         setLockedHint(msg);
       }
 
@@ -785,7 +797,8 @@
     }
 
     renderGift();
-    attachOverlay();
+    // attach after card is in DOM (extra safe for iOS standalone)
+    requestAnimationFrame(() => requestAnimationFrame(attachOverlay));
 
     return { card, renderGift, resetScratch, attachOverlay };
   }
