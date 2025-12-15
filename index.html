@@ -1,9 +1,18 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
   <title>Calendario di Letizia 🎄</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- PWA / Homescreen -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#3e1026" />
+  <!-- iOS specific -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Calendario 🎁">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
 
   <style>
     :root{
@@ -267,9 +276,39 @@
       color:#333;
     }
 
+    /* iOS Add to Home Screen helper */
+    #a2hs{
+      position:fixed;
+      left:1rem;
+      right:1rem;
+      bottom:1rem;
+      z-index:9999;
+      background:rgba(255,255,255,0.96);
+      color:var(--ink);
+      border-radius:18px;
+      box-shadow:0 20px 44px rgba(0,0,0,0.45);
+      padding:.85rem;
+      display:none;
+    }
+    #a2hs h3{margin:.1rem 0 .35rem;font-size:1rem}
+    #a2hs p{margin:.2rem 0 .6rem;opacity:.85;line-height:1.2rem}
+    #a2hs .row{display:flex;gap:.5rem;flex-wrap:wrap}
+    #a2hs button{
+      border:none;
+      border-radius:999px;
+      padding:.45rem .7rem;
+      cursor:pointer;
+      font-weight:800;
+      font-family:inherit;
+      font-size:.85rem;
+    }
+    #a2hs .ok{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+    #a2hs .no{background:#eee;color:#333}
+
     @media (max-width:720px){
       .topbar{flex-direction:column;align-items:flex-start}
       #admin{left:.8rem;right:.8rem;max-width:none}
+      #a2hs{bottom:1.1rem}
     }
   </style>
 </head>
@@ -319,6 +358,19 @@
     </div>
   </div>
 
+  <!-- iOS A2HS helper -->
+  <div id="a2hs">
+    <h3>Metti il calendario in Home</h3>
+    <p>
+      Su iPhone/iPad: tocca <strong>Condividi</strong> (⤴︎) → <strong>Aggiungi a Home</strong>.
+      Poi lo apri come un’app 😊
+    </p>
+    <div class="row">
+      <button class="ok" id="a2hs-ok">Ok</button>
+      <button class="no" id="a2hs-hide">Non mostrarlo più</button>
+    </div>
+  </div>
+
 <script>
 (() => {
   // ===== VERSIONING =====
@@ -346,6 +398,33 @@
     "24": "Il gran finale è il 24 🎄",
     "25": "Buon Natale 🎁 si apre il 25"
   };
+
+  // ===== A2HS (iOS) helper =====
+  const A2HS_KEY = "calendar_a2hs_dismissed_v1";
+  function isIOS() {
+    const ua = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function isStandalone() {
+    // iOS Safari
+    return (window.navigator.standalone === true) ||
+           (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+  function showA2HSIfNeeded() {
+    try {
+      if (!isIOS()) return;
+      if (isStandalone()) return;
+      if (localStorage.getItem(A2HS_KEY) === "1") return;
+      const el = document.getElementById("a2hs");
+      if (!el) return;
+      el.style.display = "block";
+      document.getElementById("a2hs-ok").onclick = () => el.style.display = "none";
+      document.getElementById("a2hs-hide").onclick = () => {
+        localStorage.setItem(A2HS_KEY, "1");
+        el.style.display = "none";
+      };
+    } catch {}
+  }
 
   // ===== STORAGE (localStorage + cookie fallback) =====
   function safeJsonParse(str, fallback) { try { return JSON.parse(str); } catch { return fallback; } }
@@ -439,7 +518,7 @@
     }
   }
 
-  // ===== UI =====
+  // ===== UI helpers =====
   function makeSparkle() {
     const s = document.createElement("div");
     s.className = "sparkle";
@@ -510,7 +589,7 @@
     canvas.style.pointerEvents = "auto";
   }
 
-  // ===== LOG ONLY (no UI meta) =====
+  // ===== LOG ONLY =====
   function logMeta(isAdmin, targetYear) {
     const { year, month, day } = nowInRomeParts();
     const mm = String(month).padStart(2,"0");
@@ -525,7 +604,8 @@
       targetYear,
       days: DAYS.join(","),
       localStorage: lsOk ? "ok" : "blocked",
-      admin: isAdmin
+      admin: isAdmin,
+      standalone: isStandalone()
     });
   }
 
@@ -783,6 +863,7 @@
     })();
 
     logMeta(isAdmin, targetYear);
+    showA2HSIfNeeded();
 
     const calendarEl = document.getElementById("calendar");
     calendarEl.innerHTML = "";
