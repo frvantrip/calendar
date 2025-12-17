@@ -1,13 +1,14 @@
 {
   "gifts": {
-    "16": { "imageUrl": "https://img.kwcdn.com/product/Fancyalgo/VirtualModelMatting/20b4438e45283fba0b8370330d9e3314.jpg?imageView2/2/w/800/q/70/format/avif", "caption": "Iniziamo portando un po' di Inni Boutique in GDN" },
-    "17": { "imageUrl": "https://frvantrip.github.io/calendar/xxxx.png", "caption": "xxxx" },
-    "18": { "imageUrl": "https://frvantrip.github.io/calendar/ciaba.png", "caption": "Iniziamo portando un po' di Inni Boutique in Giasone del Maino!" },
-    "19": { "imageUrl": "https://frvantrip.github.io/calendar/piastra.png", "caption": "Per le tue cenette, mai più pane tostato male!" },
-    "20": { "imageUrl": "https://frvantrip.github.io/calendar/led.png", "caption": "Alexa, accendi Led!" },
-    "21": { "imageUrl": "https://...", "caption": "..." },
-    "22": { "imageUrl": "https://...", "caption": "..." },
-    "23": { "imageUrl": "https://frvantrip.github.io/calendar/proiettore.png", "caption": "Lo so, con un film a letto, il rischio sonno sale in maniera esponenziale. Il regalo è per me: averti sul mio petto." },
-    "24": { "imageUrl": "https://...", "caption": "..." }
+    "16": { "imageUrl": "https://frvantrip.github.io/calendar/xxxx.png", "caption": "X" },
+    "17": { "imageUrl": "https://frvantrip.github.io/calendar/xxxx.png", "caption": "X" },
+    "18": { "imageUrl": "https://frvantrip.github.io/calendar/ciaba.png", "caption": "Iniziamo portando un po' di Inni Boutique in Giasone del Maino! 🇮🇸" },
+    "19": { "imageUrl": "https://frvantrip.github.io/calendar/coffee.png", "caption": "Ogni paninetto che si rispetti ha bisogno del miglior cappuccino ☕️" },
+    "20": { "imageUrl": "https://frvantrip.github.io/calendar/led.png", "caption": "Alexa, accendi Led! ⚡️" },
+    "21": { "imageUrl": "https://frvantrip.github.io/calendar/asciugamano.png", "caption": "Piccole rivoluzioni in bagno 🛀" },
+    "22": { "imageUrl": "https://frvantrip.github.io/calendar/piastra.png", "caption": "Per le tue cenette, mai più pane tostato male! 🥪" },
+    "23": { "imageUrl": "https://frvantrip.github.io/calendar/cover.png", "caption": "Equipaggio per girare il mondo e non perdersi 🌍📍" },
+    "24": { "imageUrl": "https://frvantrip.github.io/calendar/proiettore.png", "caption": "Lo so, con un film a letto, il rischio sonno sale in maniera esponenziale. Il regalo è per me: averti sul mio petto. 🎬" },
+    "25": { "imageUrl": "https://frvantrip.github.io/calendar/pile.png", "caption": "Sapendo quanto siano difficili i tuoi gusti, questa immagine è a puro scopo illustrativo, ma così saresti bellissima 😂❤️🎄" }
   }
 }
